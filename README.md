@@ -1,190 +1,130 @@
 # Infinity-Chat
 
-**Infinity-Chat** is a cross-platform AI chat system with adaptive model routing, streaming responses, and smart failover.
+Infinity-Chat is a cross-platform AI chat application with:
+- FastAPI backend (async + SSE streaming)
+- Streamlit frontend (interactive control console)
+- Groq primary inference + OpenRouter failover
+- Real persistent local storage using SQLite
 
-It runs on:
-- Windows 11
-- Linux distributions (Ubuntu, Debian, Fedora, Arch, etc.)
-- Android (via browser over same LAN)
+## Highlights
 
-Core runtime is Python with FastAPI + Streamlit, and provider orchestration across Groq and OpenRouter.
+- Smart failover: Groq -> OpenRouter on `429` / `5xx`
+- Route modes: `speed`, `balanced`, `economy`
+- Persona profiles from `config.yaml`
+- Real-time streaming tokens in UI
+- Persistent chat history saved on disk
+- Works on Linux, Windows 11, and Android browser (LAN)
 
-## 1. Project Goals
-
-Infinity-Chat is built to deliver a resilient chat experience under real-world API constraints.
-
-Design objectives:
-- Keep response flow alive during provider throttling/outages
-- Make behavior tunable (speed vs cost vs balanced)
-- Support profile-based personas for different engineering workflows
-- Keep setup permission-safe (no sudo required)
-- Provide simple operation across desktop and mobile clients
-
-## 2. What Makes This Version Unique
-
-Compared to a basic chatbot wrapper, this build includes:
-
-1. Adaptive routing engine
-- `speed`: Groq -> OpenRouter
-- `economy`: OpenRouter -> Groq
-- `balanced`: intent-aware order (code-heavy prompts prefer Groq first)
-
-2. Smart failover with policy controls
-- Auto-fallback on `429` and `5xx`
-- Non-retryable errors stop immediately with explicit diagnostics
-- Optional offline fallback response if all providers fail
-
-3. Persona profile system
-- Configurable profiles in `config.yaml`
-- Example profiles:
-  - `open_source_architect`
-  - `rapid_prototyper`
-  - `production_guardian`
-
-4. Live telemetry and observability
-- `/metrics` endpoint with rolling request window
-- Provider usage counts, fallback counts, average latency
-- Recent request log snapshots
-
-5. Advanced Streamlit control console
-- Runtime controls: route mode, provider forcing, temperature, max tokens
-- Profile selection from backend
-- Import/export chat history (JSON, Markdown)
-- Preset prompts for common workflows
-- Real-time stream debug panel (status/fallback path)
-
-6. Cross-platform app operations
-- Linux scripts: `setup.sh`, `start_app.sh`, `stop_app.sh`
-- Windows scripts: `setup.bat`, `start_app.bat`, `stop_app.bat`
-- Android access via LAN URL on browser
-
-## 3. Architecture
-
-```text
-[Browser / Desktop / Android]
-            |
-            v
- [Streamlit UI :8501]  <-- SSE events (meta/status/token/done/error)
-            |
-            v
- [FastAPI Backend :8080]
-            |
-            +--> Provider Router (speed/balanced/economy)
-            |
-            +--> Groq (primary in speed mode)
-            |
-            +--> OpenRouter (primary in economy mode)
-            |
-            +--> Optional offline fallback message
-```
-
-## 4. Repository Structure
-
-```text
-Infinity-Chat/
-├── main.py           # FastAPI backend (routing, failover, SSE, metrics)
-├── ui.py             # Streamlit control console
-├── config.yaml       # persona, profiles, models, routing defaults
-├── .env.example      # environment template
-├── requirements.txt  # Python dependencies
-├── pixi.toml         # pixi project/task config
-├── setup.sh          # Linux/macOS setup
-├── start_app.sh      # Linux/macOS start (background)
-├── stop_app.sh       # Linux/macOS stop
-├── setup.bat         # Windows setup
-├── start_app.bat     # Windows start
-├── stop_app.bat      # Windows stop
-└── README.md
-```
-
-## 5. Technology Stack
+## Tech Stack
 
 - Language: Python 3.11+
 - Backend: FastAPI, Uvicorn, HTTPX
-- Frontend: Streamlit
-- Streaming transport: Server-Sent Events (SSE)
-- Config/Env: PyYAML, python-dotenv
-- HTTP client in UI: requests
-- Environment tooling: `.venv` + optional `pixi`
+- Frontend: Streamlit, Requests
+- Validation/config: Pydantic, python-dotenv, PyYAML
+- Storage: SQLite (`sqlite3` stdlib)
+- Environment tooling: `.venv` + optional Pixi
 
-## 6. Build Summary (Super Short)
+## Persistent Storage (Real, Local, Visible)
 
-1. Built async FastAPI streaming endpoint with OpenAI-compatible chunk parsing.
-2. Added dual-provider router with route modes and automatic failover on `429/5xx`.
-3. Added persona profile system from YAML configuration.
-4. Added observability endpoints (`/health`, `/profiles`, `/metrics`) and request logs.
-5. Built Streamlit control console with runtime knobs + chat export/import.
-6. Added Linux + Windows scripts and LAN-friendly hosting for Android browser access.
+All chats are stored in a local SQLite DB file:
 
-## 7. Prerequisites
+- `data/infinity_chat.db`
 
-Minimum:
-- Python 3.11+
-- Internet access for model APIs
-- Groq API key
-- OpenRouter API key
+Backend tables:
+- `chat_sessions` (session metadata)
+- `chat_messages` (user/assistant messages)
+- `request_logs` (latency, provider, failover metrics)
 
-Optional:
-- `pixi` for managed task environment
+API endpoints for persistence:
+- `GET /storage/info` -> shows exact DB path and file size
+- `GET /sessions` -> list saved sessions
+- `GET /sessions/{session_id}/messages` -> load message history
+- `DELETE /sessions/{session_id}` -> delete a session
 
-## 8. Configuration
+UI persistence features:
+- Shows DB path and size in sidebar
+- Load/delete saved sessions from sidebar
+- New session creates a new persistent session ID
 
-### 8.1 Environment Variables
+## Architecture
 
-Copy template:
+```text
+Browser (Desktop / Android)
+   |
+   v
+Streamlit UI (ui.py :8501)
+   |
+   | POST /chat/stream (SSE)
+   v
+FastAPI API (main.py :8080)
+   |
+   +--> Provider Router (speed/balanced/economy)
+   |      - Groq
+   |      - OpenRouter
+   |
+   +--> SQLite Persistence (data/infinity_chat.db)
+```
+
+## Project Structure
+
+```text
+Infinity-Chat/
+├── main.py
+├── ui.py
+├── config.yaml
+├── .env.example
+├── requirements.txt
+├── pixi.toml
+├── setup.sh
+├── start_app.sh
+├── stop_app.sh
+├── setup.bat
+├── start_app.bat
+├── stop_app.bat
+├── data/
+│   └── .gitkeep
+└── README.md
+```
+
+## Setup
+
+### 1. Clone and configure
 
 ```bash
+git clone <your-repo-url>
+cd Infinity-Chat
 cp .env.example .env
 ```
 
-Set required values:
+Edit `.env` and set:
 - `GROQ_API_KEY`
 - `OPENROUTER_API_KEY`
 
-Common runtime values:
-- `BACKEND_HOST=0.0.0.0`
-- `BACKEND_PORT=8080`
-- `UI_HOST=0.0.0.0`
-- `UI_PORT=8501`
+### 2. Install
 
-### 8.2 `config.yaml`
-
-Main tuning keys:
-- `system_prompt`
-- `profiles`
-- `max_history_messages`
-- `default_route_mode`
-- `offline_fallback_enabled`
-- `groq_model`
-- `openrouter_model`
-
-## 9. Installation and Run Guide
-
-### 9.1 Linux / macOS
+Linux/macOS:
 
 ```bash
-cd Infinity-Chat
-cp .env.example .env
 ./setup.sh
+```
+
+Windows 11 (CMD):
+
+```bat
+setup.bat
+```
+
+## Run
+
+Linux/macOS:
+
+```bash
 ./start_app.sh
 ```
 
-Open:
-- UI: `http://127.0.0.1:8501`
-- API: `http://127.0.0.1:8080`
-
-Stop services:
-
-```bash
-./stop_app.sh
-```
-
-### 9.2 Windows 11 (CMD)
+Windows 11:
 
 ```bat
-cd Infinity-Chat
-copy .env.example .env
-setup.bat
 start_app.bat
 ```
 
@@ -192,116 +132,42 @@ Open:
 - UI: `http://127.0.0.1:8501`
 - API: `http://127.0.0.1:8080`
 
-Stop services:
+Stop:
+- Linux/macOS: `./stop_app.sh`
+- Windows: `stop_app.bat`
 
-```bat
-stop_app.bat
-```
+## Cross-Platform Details
 
-### 9.3 Android Access (Browser)
+### Linux (any distro)
+- Uses Python `venv` and shell scripts only
+- No sudo required
+- Works as long as Python 3.11+ and internet access are available
 
-1. Run app on Linux/Windows host with `UI_HOST=0.0.0.0`.
-2. Ensure phone and host are on same Wi-Fi.
-3. Find host LAN IP (shown in Streamlit sidebar).
-4. Open on Android browser:
-   - `http://<HOST_LAN_IP>:8501`
+### Windows 11
+- Uses `.bat` scripts and local `.venv`
+- No admin rights required for normal local run
+- Background start done via `start /b`
 
-If not reachable:
-- Allow inbound local firewall rule for port `8501`
-- Confirm app is listening on `0.0.0.0`
+### Android
+- Android runs the UI in browser; backend/UI still run on your desktop/laptop
+- Start app with host `0.0.0.0` (already default in scripts)
+- Connect Android and host to same Wi-Fi
+- Open `http://<HOST_LAN_IP>:8501` in Android browser
 
-## 10. API Contract
+## API Endpoints
 
-### `GET /health`
-Returns API status and provider configuration.
+- `GET /health`
+- `GET /profiles`
+- `GET /metrics`
+- `GET /storage/info`
+- `GET /sessions`
+- `GET /sessions/{session_id}/messages`
+- `DELETE /sessions/{session_id}`
+- `POST /chat` (non-stream)
+- `POST /chat/stream` (SSE stream)
 
-### `GET /profiles`
-Returns available persona profiles and default route mode.
+## Notes
 
-### `GET /metrics`
-Returns rolling telemetry window, fallback counts, provider usage, latency.
-
-### `POST /chat`
-Non-stream response mode.
-
-### `POST /chat/stream`
-SSE streaming mode with events:
-- `meta`
-- `status`
-- `token`
-- `done`
-- `error`
-
-Example payload:
-
-```json
-{
-  "message": "Design a scalable event-driven backend",
-  "history": [],
-  "session_id": "demo-1",
-  "persona_profile": "production_guardian",
-  "route_mode": "balanced",
-  "temperature": 0.7,
-  "max_tokens": 1024,
-  "force_provider": null
-}
-```
-
-## 11. Operational Behavior
-
-### Routing modes
-- `speed`: low-latency first (Groq-first)
-- `economy`: free-tier first (OpenRouter-first)
-- `balanced`: message-intent aware
-
-### Failover policy
-- Trigger fallback when current provider returns:
-  - `429`
-  - `5xx`
-- Do not fallback for non-retryable request/auth errors.
-
-### Memory policy
-- UI keeps local session buffer (configurable, default 10)
-- Backend trims history to `max_history_messages`
-
-## 12. Security and Secrets
-
-- Never commit `.env` with real keys
-- Rotate keys if exposed
-- Use provider dashboard limits to control spend
-- Keep CORS policy strict if deploying publicly
-
-## 13. Troubleshooting
-
-1. API unreachable
-- Check `backend.log`
-- Verify port `8080` is available
-
-2. UI reachable but no responses
-- Check `streamlit.log` + `backend.log`
-- Test `GET /health`
-- Validate API keys
-
-3. Fallback not occurring
-- Confirm upstream failure is `429` or `5xx`
-- Confirm secondary provider key is configured
-
-4. Android cannot connect
-- Ensure same network
-- Check host firewall
-- Verify host binding is `0.0.0.0`
-
-## 14. Recommended GitHub Push Workflow
-
-```bash
-git init
-git branch -M main
-git add .
-git commit -m "feat: Infinity-Chat v2 with adaptive routing and cross-platform runtime"
-git remote add origin <your-repo-url>
-git push -u origin main
-```
-
-## 15. License
-
-Add your preferred license file (MIT or Apache-2.0 recommended).
+- `.env` is excluded from git.
+- Local SQLite DB files are excluded from git.
+- For production, add auth, stricter CORS, and encrypted secrets management.

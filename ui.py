@@ -1,6 +1,7 @@
 import json
 import os
 import socket
+import uuid
 from datetime import datetime
 
 import requests
@@ -35,6 +36,49 @@ def fetch_profiles(backend_url: str) -> dict[str, str]:
         "open_source_architect": "Prioritizes open-source-first solutions.",
         "rapid_prototyper": "Optimizes for fastest implementation path.",
     }
+
+
+def fetch_sessions(backend_url: str) -> list[dict]:
+    try:
+        response = requests.get(f"{backend_url}/sessions", params={"limit": 100}, timeout=8)
+        if response.status_code == 200:
+            return response.json().get("sessions", [])
+    except requests.RequestException:
+        pass
+    return []
+
+
+def fetch_session_messages(backend_url: str, session_id: str) -> list[dict]:
+    try:
+        response = requests.get(
+            f"{backend_url}/sessions/{session_id}/messages",
+            params={"limit": 1000},
+            timeout=12,
+        )
+        if response.status_code == 200:
+            rows = response.json().get("messages", [])
+            return [{"role": row.get("role", "assistant"), "content": row.get("content", "")} for row in rows]
+    except requests.RequestException:
+        pass
+    return []
+
+
+def delete_session(backend_url: str, session_id: str) -> bool:
+    try:
+        response = requests.delete(f"{backend_url}/sessions/{session_id}", timeout=8)
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
+
+
+def storage_info(backend_url: str) -> dict:
+    try:
+        response = requests.get(f"{backend_url}/storage/info", timeout=8)
+        if response.status_code == 200:
+            return response.json()
+    except requests.RequestException:
+        pass
+    return {"db_path": "unavailable", "exists": False, "size_bytes": 0}
 
 
 def export_markdown(messages: list[dict[str, str]]) -> str:
@@ -87,32 +131,21 @@ st.markdown(
       color: #f5f7ff;
     }
     .block-container {max-width: 1100px;}
-    .inf-chip {
-      border: 1px solid #40507a;
-      border-radius: 999px;
-      padding: 0.2rem 0.6rem;
-      display: inline-block;
-      margin-right: 0.35rem;
-      margin-bottom: 0.35rem;
-      background-color: #141b2d;
-      color: #e2e8ff;
-      font-size: 0.8rem;
-    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 st.title("Infinity-Chat Control Console")
-st.caption("Adaptive routing, multi-profile persona engine, live failover telemetry")
+st.caption("Adaptive routing, persistent sessions, live failover telemetry")
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
             "content": (
-                "Welcome to Infinity-Chat v2. I can route by speed/cost, stream responses in real time, "
-                "and fail over across providers automatically."
+                "Welcome to Infinity-Chat v2. Persistent local storage is enabled via SQLite. "
+                "Your chats are stored on disk and can be reloaded."
             ),
         }
     ]
@@ -121,6 +154,8 @@ if "backend_url" not in st.session_state:
     st.session_state.backend_url = BACKEND_URL_DEFAULT
 if "max_local_memory" not in st.session_state:
     st.session_state.max_local_memory = MAX_LOCAL_MEMORY_DEFAULT
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
 
 with st.sidebar:
     st.subheader("Runtime")
@@ -148,15 +183,46 @@ with st.sidebar:
         index=profile_keys.index(default_profile),
     )
 
-    st.subheader("Session")
-    if st.button("New Chat", use_container_width=True):
-        st.session_state.messages = [
-            {
-                "role": "assistant",
-                "content": "New session started."
-            }
-        ]
+    st.subheader("Persistence")
+    st.caption(f"Current session: `{st.session_state.session_id}`")
 
+    store = storage_info(st.session_state.backend_url)
+    st.caption(f"DB: `{store.get('db_path', 'unknown')}`")
+    st.caption(f"DB size: {store.get('size_bytes', 0)} bytes")
+
+    sessions = fetch_sessions(st.session_state.backend_url)
+    session_labels = [
+        f"{row.get('title', 'Untitled')} | {row.get('session_id', '')[:8]} | {row.get('message_count', 0)} msgs"
+        for row in sessions
+    ]
+    session_index = st.selectbox(
+        "Saved sessions",
+        options=list(range(len(session_labels))) if session_labels else [0],
+        format_func=lambda idx: session_labels[idx] if session_labels else "No saved sessions",
+    )
+
+    col_new, col_load = st.columns(2)
+    if col_new.button("New", use_container_width=True):
+        st.session_state.session_id = str(uuid.uuid4())
+        st.session_state.messages = [{"role": "assistant", "content": "New persistent session started."}]
+
+    if col_load.button("Load", use_container_width=True) and sessions:
+        selected = sessions[session_index]
+        loaded_messages = fetch_session_messages(st.session_state.backend_url, selected["session_id"])
+        if loaded_messages:
+            st.session_state.session_id = selected["session_id"]
+            st.session_state.messages = loaded_messages
+            st.success("Session loaded")
+
+    if st.button("Delete Selected Session", use_container_width=True) and sessions:
+        selected = sessions[session_index]
+        if delete_session(st.session_state.backend_url, selected["session_id"]):
+            st.success("Session deleted")
+            if st.session_state.session_id == selected["session_id"]:
+                st.session_state.session_id = str(uuid.uuid4())
+                st.session_state.messages = [{"role": "assistant", "content": "Session deleted. New session started."}]
+
+    st.subheader("Session Tools")
     md_data = export_markdown(st.session_state.messages)
     st.download_button(
         label="Export Markdown",
@@ -240,7 +306,7 @@ if prompt:
         payload = {
             "message": prompt,
             "history": st.session_state.messages[-st.session_state.max_local_memory :],
-            "session_id": "streamlit-local",
+            "session_id": st.session_state.session_id,
             "persona_profile": persona_profile,
             "route_mode": route_mode,
             "temperature": temperature,
@@ -280,9 +346,11 @@ if prompt:
 
                             if event_type == "meta":
                                 providers_text = " -> ".join(packet.get("providers", []))
+                                st.session_state.session_id = packet.get("session_id", st.session_state.session_id)
                                 status_placeholder.caption(
-                                    f"Req {packet.get('request_id', '-')[:8]} | Mode: {packet.get('route_mode')} "
-                                    f"| Profile: {packet.get('persona_profile')} | Plan: {providers_text}"
+                                    f"Req {packet.get('request_id', '-')[:8]} | Session: {st.session_state.session_id[:8]} "
+                                    f"| Mode: {packet.get('route_mode')} | Profile: {packet.get('persona_profile')} "
+                                    f"| Plan: {providers_text}"
                                 )
                             elif event_type == "status":
                                 provider = packet.get("provider", "unknown")

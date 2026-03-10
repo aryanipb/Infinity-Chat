@@ -14,6 +14,10 @@ venv/
 *.log
 *.pid
 
+# Local persistent storage
+data/*.db
+data/*.sqlite
+
 # Streamlit cache
 .streamlit/
 
