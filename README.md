@@ -96,11 +96,65 @@ cd Infinity-Chat
 cp .env.example .env
 ```
 
-Edit `.env` and set:
-- `GROQ_API_KEY`
-- `OPENROUTER_API_KEY`
+### 2. Get real API keys
 
-### 2. Install
+Groq:
+- Open `https://console.groq.com/`
+- Sign in
+- Go to `https://console.groq.com/keys`
+- Create a new API key
+
+OpenRouter:
+- Open `https://openrouter.ai/`
+- Sign in
+- Go to `https://openrouter.ai/docs/api-keys`
+- Create a new API key
+
+Use the keys exactly as raw values in `.env`. Do not wrap them in quotes.
+
+Correct:
+
+```env
+GROQ_API_KEY=your_real_groq_key
+OPENROUTER_API_KEY=your_real_openrouter_key
+```
+
+Avoid:
+
+```env
+GROQ_API_KEY="your_real_groq_key"
+OPENROUTER_API_KEY='your_real_openrouter_key'
+```
+
+### 3. Add API keys to `.env`
+
+Linux/macOS:
+
+```bash
+nano .env
+```
+
+Windows 11 (CMD):
+
+```bat
+notepad .env
+```
+
+Set at least:
+
+```env
+GROQ_API_KEY=your_real_groq_key
+OPENROUTER_API_KEY=your_real_openrouter_key
+```
+
+Optional runtime values already included in `.env.example`:
+- `BACKEND_HOST=0.0.0.0`
+- `BACKEND_PORT=8080`
+- `UI_HOST=0.0.0.0`
+- `UI_PORT=8501`
+- `SQLITE_PATH=data/infinity_chat.db`
+
+### 4. Install
 
 Linux/macOS:
 
@@ -153,6 +207,8 @@ Stop:
 - Start app with host `0.0.0.0` (already default in scripts)
 - Connect Android and host to same Wi-Fi
 - Open `http://<HOST_LAN_IP>:8501` in Android browser
+- API keys are still added only on the host machine in `.env`
+- Android does not store or need the provider keys locally
 
 ## API Endpoints
 
