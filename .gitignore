@@ -20,6 +20,8 @@ data/*.sqlite
 
 # Streamlit cache
 .streamlit/
+!.streamlit/
+!.streamlit/config.toml
 
 # IDE files
 .vscode/
