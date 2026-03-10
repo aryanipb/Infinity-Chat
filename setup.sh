@@ -49,8 +49,11 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
 if command -v pixi >/dev/null 2>&1; then
-  pixi install
-  echo "pixi environment prepared"
+  if pixi install; then
+    echo "pixi environment prepared"
+  else
+    echo "pixi install failed; continuing because the local .venv is already ready."
+  fi
 else
   echo "pixi not found; skipped pixi install (venv setup is complete)."
 fi

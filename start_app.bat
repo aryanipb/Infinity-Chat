@@ -21,7 +21,7 @@ if "%UI_PORT%"=="" set UI_PORT=8501
 call .venv\Scripts\activate
 
 start /b cmd /c "python -m uvicorn main:app --host %BACKEND_HOST% --port %BACKEND_PORT% > backend.log 2>&1"
-start /b cmd /c "streamlit run ui.py --server.port %UI_PORT% --server.address %UI_HOST% > streamlit.log 2>&1"
+start /b cmd /c "streamlit run ui.py --server.port %UI_PORT% --server.address %UI_HOST% --browser.gatherUsageStats false > streamlit.log 2>&1"
 
 echo Backend: http://127.0.0.1:%BACKEND_PORT%
 echo Streamlit: http://127.0.0.1:%UI_PORT%

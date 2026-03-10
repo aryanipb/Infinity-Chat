@@ -52,6 +52,23 @@ class NonRetryableProviderError(Exception):
     pass
 
 
+def should_retry_provider_error(provider: Provider, status_code: int, body_text: str) -> bool:
+    if status_code == 429 or status_code >= 500:
+        return True
+
+    if provider.name != "openrouter" or status_code != 400:
+        return False
+
+    lowered = body_text.lower()
+    retryable_markers = (
+        "not a valid model id",
+        "invalid model",
+        "model not found",
+        "no endpoints found",
+    )
+    return any(marker in lowered for marker in retryable_markers)
+
+
 def load_config(path: str = "config.yaml") -> dict[str, Any]:
     if not os.path.exists(path):
         return {
@@ -60,7 +77,7 @@ def load_config(path: str = "config.yaml") -> dict[str, Any]:
             "max_history_messages": 10,
             "default_route_mode": "balanced",
             "groq_model": "llama-4-70b",
-            "openrouter_model": "mistral-small-3.1-24b-instruct:free",
+            "openrouter_model": "openrouter/free",
             "profiles": {
                 "open_source_architect": "You prioritize open-source-first technical solutions.",
             },
@@ -348,7 +365,7 @@ def get_provider_map() -> dict[str, Provider]:
             api_key=os.getenv("OPENROUTER_API_KEY"),
             model=os.getenv(
                 "OPENROUTER_MODEL",
-                CONFIG.get("openrouter_model", "mistral-small-3.1-24b-instruct:free"),
+                CONFIG.get("openrouter_model", "openrouter/free"),
             ),
         ),
     }
@@ -415,16 +432,15 @@ async def stream_from_provider(
             headers=headers,
             json=payload,
         ) as resp:
-            if resp.status_code == 429 or resp.status_code >= 500:
-                body = await resp.aread()
-                raise RetryableProviderError(
-                    f"{provider.name} returned {resp.status_code}: {body[:300].decode(errors='ignore')}"
-                )
-
             if resp.status_code >= 400:
                 body = await resp.aread()
+                body_text = body[:300].decode(errors="ignore")
+                if should_retry_provider_error(provider, resp.status_code, body_text):
+                    raise RetryableProviderError(
+                        f"{provider.name} returned {resp.status_code}: {body_text}"
+                    )
                 raise NonRetryableProviderError(
-                    f"{provider.name} returned {resp.status_code}: {body[:300].decode(errors='ignore')}"
+                    f"{provider.name} returned {resp.status_code}: {body_text}"
                 )
 
             async for line in resp.aiter_lines():

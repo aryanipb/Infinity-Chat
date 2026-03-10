@@ -24,7 +24,7 @@ source .venv/bin/activate
 nohup python -m uvicorn main:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" > backend.log 2>&1 &
 BACKEND_PID=$!
 
-nohup streamlit run ui.py --server.port "$UI_PORT" --server.address "$UI_HOST" > streamlit.log 2>&1 &
+nohup streamlit run ui.py --server.port "$UI_PORT" --server.address "$UI_HOST" --browser.gatherUsageStats false > streamlit.log 2>&1 &
 UI_PID=$!
 
 echo "$BACKEND_PID" > backend.pid

@@ -18,4 +18,4 @@ profiles:
     Focus on reliability, monitoring, rollback strategy, and risk management.
 
 groq_model: "llama-4-70b"
-openrouter_model: "mistral-small-3.1-24b-instruct:free"
+openrouter_model: "openrouter/free"
