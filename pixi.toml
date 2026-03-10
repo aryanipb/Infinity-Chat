@@ -1,0 +1,23 @@
+[project]
+name = "infinity-chat"
+version = "0.1.0"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.11.*"
+pip = "*"
+
+[pypi-dependencies]
+fastapi = "==0.116.1"
+uvicorn = { version = "==0.35.0", extras = ["standard"] }
+httpx = "==0.28.1"
+pydantic = "==2.11.7"
+python-dotenv = "==1.1.1"
+pyyaml = "==6.0.2"
+streamlit = "==1.48.1"
+requests = "==2.32.5"
+
+[tasks]
+backend = "uvicorn main:app --host 0.0.0.0 --port 8080"
+ui = "streamlit run ui.py --server.port 8501 --server.address 0.0.0.0"
