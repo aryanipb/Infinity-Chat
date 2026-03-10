@@ -168,6 +168,32 @@ Windows 11 (CMD):
 setup.bat
 ```
 
+### Python version note
+
+This project should be installed with Python `3.11`, `3.12`, or `3.13`.
+
+Reason:
+- some dependencies, especially `pydantic-core`, may fail to build on Python `3.14` because upstream Rust bindings may not support it yet
+
+If installation fails on Linux because your default `python3` is `3.14`, this repository's `setup.sh` now automatically prefers:
+- `python3.13`
+- then `python3.12`
+- then `python3.11`
+
+On a machine like CachyOS where `python3.12` is available, recover with:
+
+```bash
+cd ~/work/projects/Infinity-Chat
+rm -rf .venv
+./setup.sh
+```
+
+You can verify the interpreter version with:
+
+```bash
+.venv/bin/python --version
+```
+
 ## Run
 
 Linux/macOS:
